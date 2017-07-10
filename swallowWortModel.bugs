@@ -1,0 +1,118 @@
+model {
+
+  #################################
+  # Seed resource density model
+  #################################
+  
+  for (t in 1:nYear) {
+      V[t] ~ dpois(exp(ls.mu[t])) # Number of seedpods
+      A[t] ~ dlnorm(la[t], tau.eta) # Area covered by plants
+      E[t] ~ dbetabin(pe[t] / th.bb, (1 - pe[t])/th.bb, V[t]) # Predation by Euphranta
+  }
+
+  #################################
+  # Process models
+  #################################
+  
+  ## Plant cover as a RW2 process
+  
+  la[1] ~ dnorm(2*la0 - la00, tau.gamma)
+  la[2] ~ dnorm(2*la[1] - la0, tau.gamma)
+
+  for (t in 2:(nYear - 1)) {
+
+    la[t + 1] ~ dnorm(2*la[t]-la[t - 1], tau.gamma)
+
+  }
+
+  for (t in 1:(nYear - 1)) {
+
+    ## Seed resource density model
+
+    ls.mu[t + 1]  ~ dnorm(ls.pred[t], tau.epsilon)
+    ls.pred[t] <- la[t + 1] + a0  + c1 * rain[t + 1] + interp.lin(ls.mu[t] - la[t], grid[1:nG], tp[1:nG]) # 
+    ls.eps[t] <- ls.mu[t+1] - ls.pred[t]
+    
+
+  }
+
+    ## Predation rate 
+    pe[1] = 0.5
+    pe[2] = 0.5
+    pe[3] = 0.5
+    pe[4] = 0.5
+    pe[5] = 0.5
+    for (t in 5:(nYear-1)) {
+      logit(pe[t+1]) <- d0 +  interp.lin(log(V[t+1] / E[t]), gridP[1:nG], tpP[1:nG])
+    }
+
+  
+  #################################
+  # Priors
+  #################################
+
+  ## Initial values
+  
+  la0 ~ dnorm(0, 1E-4)
+  la00 ~ dnorm(0, 1E-4)
+  ls.mu[1] ~ dnorm(0, 1E-4)
+  #pe[1] ~ dunif(0, 1)  
+  
+  ## Thin plate spline for resource feedback
+  
+  for (i in 1:nG) {
+    tp[i] <- mfe[i] + mre[i]
+    mfe[i] <-  beta[2]*X[i,2] # beta[1]*X[i,1] +
+    mre[i] <- inprod(b, Z[i,1:nK])
+  }
+  
+  beta[1] ~ dnorm(0, 1E-4)
+  beta[2] ~ dnorm(0, 1E-4)
+  
+  for (k in 1:nK) {
+    b[k] ~ dnorm(0, tau.b)
+  }
+  
+  # Thin plate spline for predation rate
+  for (i in 1:nG) {
+    tpP[i] <- mfeP[i] + mreP[i]
+    mfeP[i] <-  betaP[2]*XP[i,2] # beta[1]*X[i,1] +
+    mreP[i] <- inprod(bP, ZP[i,1:nK])
+  }
+  
+  betaP[1] ~ dnorm(0, 1E-4)
+  betaP[2] ~ dnorm(0, 1E-4)
+  
+  for (k in 1:nK) {
+    bP[k] ~ dnorm(0, tau.bP)
+  }
+
+
+  ## Regression coefficients ##
+ 
+  a0 ~ dnorm(0, 1E-4)
+  c1 ~ dnorm(0, 1E-4)
+  d0 ~ dnorm(0,1E-2)
+  d1 ~ dnorm(0,1E-2)
+
+
+  ## Variance parameters
+  
+  tau.b <- pow(s.b, -2)
+  s.b ~ dunif(0, 10)
+  
+  tau.bP <- pow(s.bP, -2)
+  s.bP ~ dunif(0, 10)
+  
+  s.eta ~ dunif(0, 10)
+  tau.eta <- pow(s.eta, -2)
+
+  tau.gamma <- pow(s.gamma, -2)
+  s.gamma ~ dunif(0, 10)
+
+  s.epsilon ~ dunif(0, 10)
+  tau.epsilon <- pow(s.epsilon, -2)
+  
+  th.bb ~ dunif(0,0.5)
+  
+}
